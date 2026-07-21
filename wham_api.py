@@ -35,7 +35,7 @@ def prepare_cfg():
 
 def load_video(video):
     cap = cv2.VideoCapture(video)
-    assert cap.isOpened(), f'Faild to load video file {video}'
+    assert cap.isOpened(), f'Failed to load video file {video}'
     fps = cap.get(cv2.CAP_PROP_FPS)
     length = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     width, height = cap.get(cv2.CAP_PROP_FRAME_WIDTH), cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
