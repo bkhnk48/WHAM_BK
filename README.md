@@ -36,7 +36,7 @@ python demo.py --video examples/IMG_9732.mov --visualize --mp4
 
 We assume camera focal length following [CLIFF](https://github.com/haofanwang/CLIFF). You can specify known camera intrinsics [fx fy cx cy] for SLAM as the demo example below:
 ```
-python demo.py --video examples/drone_video.mp4 --calib examples/drone_calib.txt --visualize
+python demo.py --video examples/drone_video.mp4 --calib examples/drone_calib.txt --visualize --mp4
 ```
 
 You can skip SLAM if you only want to get camera-coordinate motion. You can run as:
