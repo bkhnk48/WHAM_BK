@@ -19,6 +19,7 @@ from lib.models import build_network, build_body_model
 from lib.models.preproc.detector import DetectionModel
 from lib.models.preproc.extractor import FeatureExtractor
 from lib.models.smplify import TemporalSMPLify
+import pdb
 
 try: 
     from lib.models.preproc.slam import SLAMModel
@@ -42,13 +43,28 @@ def run(cfg,
     length = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     width, height = cap.get(cv2.CAP_PROP_FRAME_WIDTH), cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
     
+    # Use the input video filename as the output prefix.
+    video_name = osp.splitext(osp.basename(video))[0]
+
+    tracking_file = osp.join(
+        output_pth, f'tracking_results_{video_name}.pth'
+    )
+    slam_file = osp.join(
+        output_pth, f'slam_result_{video_name}.pth'
+    )
+    wham_file = osp.join(
+        output_pth, f'wham_{video_name}.pkl'
+    )
+    rendered_file = osp.join(
+        output_pth, f'output_{video_name}.mp4'
+    )
+    
     # Whether or not estimating motion in global coordinates
     run_global = run_global and _run_global
     
     # Preprocess
     with torch.no_grad():
-        if not (osp.exists(osp.join(output_pth, 'tracking_results.pth')) and 
-                osp.exists(osp.join(output_pth, 'slam_results.pth'))):
+        if not (osp.exists(tracking_file) and osp.exists(slam_file)):
             
             detector = DetectionModel(cfg.DEVICE.lower())
             extractor = FeatureExtractor(cfg.DEVICE.lower(), cfg.FLIP_EVAL)
@@ -84,14 +100,19 @@ def run(cfg,
             logger.info('Complete Data preprocessing!')
             
             # Save the processed data
-            joblib.dump(tracking_results, osp.join(output_pth, 'tracking_results.pth'))
-            joblib.dump(slam_results, osp.join(output_pth, 'slam_results.pth'))
-            logger.info(f'Save processed data at {output_pth}')
+            joblib.dump(tracking_results, tracking_file)
+            joblib.dump(slam_results, slam_file)
+
+            logger.info(f'Saved tracking results: {tracking_file}')
+            logger.info(f'Saved SLAM results: {slam_file}')
         
         # If the processed data already exists, load the processed data
         else:
-            tracking_results = joblib.load(osp.join(output_pth, 'tracking_results.pth'))
-            slam_results = joblib.load(osp.join(output_pth, 'slam_results.pth'))
+            tracking_results = joblib.load(tracking_file)
+            slam_results = joblib.load(slam_file)
+
+            logger.info(f'Loaded tracking results: {tracking_file}')
+            logger.info(f'Loaded SLAM results: {slam_file}')
             logger.info(f'Already processed data exists at {output_pth} ! Load the data .')
     
     # Build dataset
@@ -168,13 +189,32 @@ def run(cfg,
         results[_id]['frame_ids'] = frame_id
     
     if save_pkl:
-        joblib.dump(results, osp.join(output_pth, "wham_output.pkl"))
+        joblib.dump(results, wham_file)
+        logger.info(f'Saved WHAM results: {wham_file}')
      
     # Visualize
     if visualize:
         from lib.vis.run_vis import run_vis_on_demo
         with torch.no_grad():
-            run_vis_on_demo(cfg, video, results, output_pth, network.smpl, vis_global=run_global)
+            run_vis_on_demo(
+                cfg,
+                video,
+                results,
+                output_pth,
+                network.smpl,
+                vis_global=run_global
+            )
+
+        # Rename the rendered video to output_<video_name>.mp4.
+        default_rendered_file = osp.join(output_pth, 'output.mp4')
+
+        if osp.isfile(default_rendered_file):
+            os.replace(default_rendered_file, rendered_file)
+            logger.info(f'Saved rendered video: {rendered_file}')
+        else:
+            logger.warning(
+                f'Rendered video was not found: {default_rendered_file}'
+            )
         
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -204,10 +244,13 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     cfg = get_cfg_defaults()
-    cfg.merge_from_file('configs/yamls/demo.yaml')
+    cfg.merge_from_file('configs/yamls/demo_cpu.yaml')
     
-    logger.info(f'GPU name -> {torch.cuda.get_device_name()}')
-    logger.info(f'GPU feat -> {torch.cuda.get_device_properties("cuda")}')    
+    if torch.cuda.is_available():
+        logger.info(f'GPU name -> {torch.cuda.get_device_name()}')
+        logger.info(f'GPU feat -> {torch.cuda.get_device_properties("cuda")}')
+    else:
+        logger.info('CUDA unavailable; attempting CPU inference.') 
     
     # ========= Load WHAM ========= #
     smpl_batch_size = cfg.TRAIN.BATCH_SIZE * cfg.DATASET.SEQLEN
@@ -216,7 +259,7 @@ if __name__ == '__main__':
     network.eval()
     
     # Output folder
-    sequence = '.'.join(args.video.split('/')[-1].split('.')[:-1])
+    sequence = osp.splitext(osp.basename(args.video))[0]
     output_pth = osp.join(args.output_pth, sequence)
     os.makedirs(output_pth, exist_ok=True)
     
