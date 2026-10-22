@@ -31,7 +31,7 @@ bash fetch_demo_data.sh
 
 You can try with one examplar video:
 ```
-python demo.py --video examples/IMG_9732.mov --visualize
+python demo.py --video examples/IMG_9732.mov --visualize --mp4
 ```
 
 We assume camera focal length following [CLIFF](https://github.com/haofanwang/CLIFF). You can specify known camera intrinsics [fx fy cx cy] for SLAM as the demo example below:
@@ -41,7 +41,7 @@ python demo.py --video examples/drone_video.mp4 --calib examples/drone_calib.txt
 
 You can skip SLAM if you only want to get camera-coordinate motion. You can run as:
 ```
-python demo.py --video examples/IMG_9732.mov --visualize --estimate_local_only
+python demo.py --video examples/IMG_9732.mov --visualize --estimate_local_only --mp4
 ```
 
 You can further refine the results of WHAM using Temporal SMPLify as a post processing. This will allow better 2D alignment as well as 3D accuracy. All you need to do is add `--run_smplify` flag when running demo.
