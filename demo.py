@@ -35,7 +35,8 @@ def run(cfg,
         calib=None,
         run_global=True,
         save_pkl=False,
-        visualize=False):
+        visualize=False,
+        mp4=False):
     
     cap = cv2.VideoCapture(video)
     assert cap.isOpened(), f'Faild to load video file {video}'
@@ -202,18 +203,24 @@ def run(cfg,
                 results,
                 output_pth,
                 network.smpl,
-                vis_global=run_global
+                vis_global=run_global,
+                mp4=mp4,
             )
 
         # Rename the rendered video to output_<video_name>.mp4.
-        default_rendered_file = osp.join(output_pth, 'output.mp4')
-
-        if osp.isfile(default_rendered_file):
-            os.replace(default_rendered_file, rendered_file)
-            logger.info(f'Saved rendered video: {rendered_file}')
+        if mp4:
+            # Chỉ đổi tên khi thực sự xuất video.
+            default_rendered_file = osp.join(output_pth, 'output.mp4')
+            if osp.isfile(default_rendered_file):
+                os.replace(default_rendered_file, rendered_file)
+                logger.info(f'Saved rendered video: {rendered_file}')
+            else:
+                logger.warning(
+        	    f'Rendered video was not found: {default_rendered_file}'
+        	)
         else:
-            logger.warning(
-                f'Rendered video was not found: {default_rendered_file}'
+            logger.info(
+        	f'Rendered JPG frames saved to: {osp.join(output_pth, "mp4")}'
             )
         
 if __name__ == '__main__':
@@ -234,6 +241,9 @@ if __name__ == '__main__':
     
     parser.add_argument('--visualize', action='store_true',
                         help='Visualize the output mesh if True')
+                        
+    parser.add_argument('--mp4', action='store_true',
+                        help='Save rendered results as an MP4 video. Without this flag, save rendered frames as JPG images.')
     
     parser.add_argument('--save_pkl', action='store_true',
                         help='Save output as pkl file')
@@ -270,7 +280,8 @@ if __name__ == '__main__':
         args.calib, 
         run_global=not args.estimate_local_only, 
         save_pkl=args.save_pkl,
-        visualize=args.visualize)
+        visualize=args.visualize,
+        mp4=args.mp4)
         
     print()
     logger.info('Done !')
