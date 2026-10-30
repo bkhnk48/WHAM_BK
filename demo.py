@@ -20,6 +20,8 @@ from lib.models.preproc.detector import DetectionModel
 from lib.models.preproc.extractor import FeatureExtractor
 from lib.models.smplify import TemporalSMPLify
 import pdb
+import json
+import shutil
 
 
 try: 
@@ -28,6 +30,162 @@ try:
 except: 
     logger.info('DPVO is not properly installed. Only estimate in local coordinates !')
     _run_global = False
+
+#hàm tạo và xuất calibration
+def export_calibration(video, output_pth, calib=None):
+    """
+    Export camera intrinsics used by WHAM/DPVO.
+
+    Format:
+        fx fy cx cy
+
+    Priority:
+        1. User-provided calibration file (if valid).
+        2. Existing output_pth/calib.txt (if valid).
+        3. WHAM heuristic based on video resolution.
+
+    IMPORTANT:
+        WHAM heuristic is NOT physical camera calibration.
+    """
+
+    os.makedirs(output_pth, exist_ok=True)
+
+    cap = cv2.VideoCapture(video)
+
+    if not cap.isOpened():
+        raise RuntimeError(f"Cannot open video: {video}")
+
+    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+
+    cap.release()
+
+    if width <= 0 or height <= 0:
+        raise ValueError(
+            f"Invalid video resolution: {width}x{height}"
+        )
+
+    output_calib = osp.join(output_pth, "calib.txt")
+    metadata_file = osp.join(
+        output_pth, "calib_metadata.json"
+    )
+
+    def read_calibration(path):
+        values = np.loadtxt(path, dtype=np.float64).reshape(-1)
+
+        if len(values) != 4:
+            raise ValueError(
+                f"Calibration must contain exactly 4 values: {path}"
+            )
+
+        if not np.all(np.isfinite(values)):
+            raise ValueError(
+                f"Calibration contains invalid values: {path}"
+            )
+
+        fx, fy, cx, cy = values
+
+        if fx <= 0 or fy <= 0:
+            raise ValueError(
+                f"Focal lengths must be positive: {path}"
+            )
+
+        return values
+
+    # 1. User-provided calibration
+    if calib is not None and osp.isfile(calib):
+
+        intrinsics = read_calibration(calib)
+        source = "user_provided"
+
+        if osp.abspath(calib) != osp.abspath(output_calib):
+            np.savetxt(
+                output_calib,
+                intrinsics.reshape(1, 4),
+                fmt="%.8f"
+            )
+
+    # 2. Existing calibration in output directory
+    elif osp.isfile(output_calib):
+
+        intrinsics = read_calibration(output_calib)
+        source = "existing_output_calibration"
+
+    # 3. WHAM heuristic
+    else:
+
+        focal_length = np.sqrt(
+            width ** 2 + height ** 2
+        )
+
+        fx = focal_length
+        fy = focal_length
+        cx = width / 2.0
+        cy = height / 2.0
+
+        intrinsics = np.array(
+            [fx, fy, cx, cy],
+            dtype=np.float64
+        )
+
+        source = "wham_heuristic"
+
+        np.savetxt(
+            output_calib,
+            intrinsics.reshape(1, 4),
+            fmt="%.8f"
+        )
+
+    fx, fy, cx, cy = intrinsics
+
+    metadata = {
+        "video": osp.abspath(video),
+        "resolution": {
+            "width": width,
+            "height": height
+        },
+        "fps": fps,
+        "frame_count": frame_count,
+        "intrinsics": {
+            "fx": float(fx),
+            "fy": float(fy),
+            "cx": float(cx),
+            "cy": float(cy)
+        },
+        "calibration_source": source,
+        "coordinate_unit": "pixels",
+        "format": "fx fy cx cy",
+        "is_physical_calibration": (
+            source == "user_provided"
+        ),
+        "description": (
+            "WHAM/DPVO camera intrinsics. "
+            "WHAM heuristic values are assumed intrinsics, "
+            "not physically calibrated camera parameters."
+        )
+    }
+
+    with open(metadata_file, "w") as f:
+        json.dump(metadata, f, indent=4)
+
+    logger.info(
+        f"Camera calibration saved: {output_calib}"
+    )
+
+    logger.info(
+        f"Calibration source: {source}"
+    )
+
+    logger.info(
+        f"Intrinsics: fx={fx:.4f}, fy={fy:.4f}, "
+        f"cx={cx:.4f}, cy={cy:.4f}"
+    )
+
+    return output_calib, intrinsics
+
 
 def run(cfg,
         video,
