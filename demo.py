@@ -22,6 +22,7 @@ from lib.models.smplify import TemporalSMPLify
 import pdb
 import json
 import shutil
+import re
 
 
 try: 
@@ -186,6 +187,77 @@ def export_calibration(video, output_pth, calib=None):
 
     return output_calib, intrinsics
 
+def export_camera_json(video, output_pth, calib_file, wham_file=None,
+                       offset=0):
+
+    """
+    Create data_camX.json directly from calib.txt.
+
+    The JSON preserves existing calib_metadata.json fields.
+    """
+
+    video_name = osp.splitext(osp.basename(video))[0]
+
+    # Extract camera number from filename, e.g. cam1, cam04.
+    match = re.search(r'cam(\d+)', video_name, re.IGNORECASE)
+
+    if match is None:
+        raise ValueError(
+            f"Cannot extract camera ID from filename: {video_name}"
+        )
+
+    camera_id = f"cam{match.group(1)}"
+
+    # Read intrinsics directly from calib.txt.
+    values = np.loadtxt(calib_file, dtype=np.float64).reshape(-1)
+
+    if len(values) != 4:
+        raise ValueError(
+            f"Expected 4 values in {calib_file}, got {len(values)}"
+        )
+
+    fx, fy, cx, cy = values
+
+    intrinsic_matrix = [
+        [float(fx), 0.0, float(cx)],
+        [0.0, float(fy), float(cy)],
+        [0.0, 0.0, 1.0]
+    ]
+
+    # Preserve existing calibration metadata.
+    metadata_file = osp.join(output_pth, "calib_metadata.json")
+
+    metadata = {}
+
+    if osp.isfile(metadata_file):
+        with open(metadata_file, "r") as f:
+            metadata = json.load(f)
+
+    # Add required fields.
+    metadata.update({
+        "camera_id": camera_id,
+        "source_pkl": (
+            osp.relpath(wham_file)
+            if wham_file is not None
+            else None
+        ),
+        "offset": int(offset),
+        "intrinsics_source": osp.basename(calib_file),
+        "intrinsics_estimation": intrinsic_matrix
+    })
+
+    # Export JSON.
+    json_file = osp.join(
+        output_pth,
+        f"data_{camera_id}.json"
+    )
+
+    with open(json_file, "w") as f:
+        json.dump(metadata, f, indent=4)
+
+    logger.info(f"Camera JSON saved: {json_file}")
+
+    return json_file
 
 def run(cfg,
         video,
@@ -202,6 +274,12 @@ def run(cfg,
     fps = cap.get(cv2.CAP_PROP_FPS)
     length = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     width, height = cap.get(cv2.CAP_PROP_FRAME_WIDTH), cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
+    # Export calibration for every input video
+    calib, intrinsics = export_calibration(
+        video,
+        output_pth,
+        calib
+    )
     
     # Use the input video filename as the output prefix.
     video_name = osp.splitext(osp.basename(video))[0]
@@ -217,6 +295,15 @@ def run(cfg,
     )
     rendered_file = osp.join(
         output_pth, f'output_{video_name}.mp4'
+    )
+    
+    # 2. Immediately create data_camX.json from calib.txt.
+    camera_json = export_camera_json(
+        video=video,
+        output_pth=output_pth,
+        calib_file=calib,
+        wham_file=wham_file,
+        offset=0
     )
     
     # Whether or not estimating motion in global coordinates
