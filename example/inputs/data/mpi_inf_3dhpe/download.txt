@@ -1,0 +1,7 @@
+Tập train (S3->S8):
+  S8: https://drive.google.com/drive/folders/14E_2XsKkbCMbE_6cTylW_NKT4oibGXeM
+  S7: https://drive.google.com/drive/folders/1dd1RB_VzRygdefO1RP8QOsfGIhTnOvqq
+  S6: https://drive.google.com/drive/folders/1JGhehmTDql3zXHfH-3hQ0hXY7DMlchEx
+  S5: https://drive.google.com/drive/folders/1USC5Qvdk2X9FlrHWwfAnDG-c1FNbY2oe
+  S4: https://drive.google.com/drive/folders/1YhmSYrcNfdy_W4TE-smsRNl3virvYjRu
+  S3: https://drive.google.com/drive/folders/1iZJiWTn2UjMq8_Sn0PyTcMgXjFto5Pnn
